@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Хранилище паролей</title>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: #f4f6f8;
+    margin: 0;
+    padding: 10px;
+    color: #2c3e50;
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+
+  h1 {
+    font-size: 18px;
+    padding: 8px 10px;
+    margin: 0;
+    background: #2c3e50;
+    color: #fff;
+    font-weight: 500;
+  }
+
+  /* ===== Верхняя часть ===== */
+  .top-part { padding: 16px 20px; }
+
+  .table-scroll {
+    height: 336px;
+    overflow-y: auto;
+    border: 1px solid #eef2f5;
+    border-radius: 8px;
+    position: relative;
+  }
+
+  .table-scroll::-webkit-scrollbar { width: 10px; }
+  .table-scroll::-webkit-scrollbar-track { background: #f4f6f8; }
+  .table-scroll::-webkit-scrollbar-thumb {
+    background: #c8d3dc;
+    border-radius: 5px;
+    border: 2px solid #f4f6f8;
+  }
+  .table-scroll::-webkit-scrollbar-thumb:hover { background: #a9b8c4; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    table-layout: fixed;
+  }
+
+  thead th.col-site  { width: 30%; }
+  thead th.col-login { width: 30%; }
+  thead th.col-desc  { width: 32%; }
+  thead th.col-act   { width: 8%; text-align: center; }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: left;
+    padding: 0 12px;
+    height: 42px;
+    line-height: 42px;
+    background: #eef2f5;
+    color: #55606b;
+    font-weight: 600;
+    border-bottom: 2px solid #d8e0e6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  tbody td {
+    padding: 0 12px;
+    height: 42px;
+    line-height: 42px;
+    border-bottom: 1px solid #eef2f5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+  }
+
+  tbody tr {
+    height: 42px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  tbody tr:hover { background: #f7fbfd; }
+  tbody tr.selected {
+    background: #e3f1fb;
+    box-shadow: inset 3px 0 0 #3498db;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+
+  /* ===== Пустое состояние ===== */
+  .empty-state {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #a9b8c4;
+    font-size: 14px;
+    gap: 8px;
+    user-select: none;
+  }
+  .empty-state .icon { font-size: 32px; opacity: 0.6; }
+
+  .table-scroll.is-empty .empty-state { display: flex; }
+  .table-scroll.is-empty table { display: none; }
+
+  /* ===== Оверлей загрузки ===== */
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(1px);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #7a8691;
+    font-size: 14px;
+    gap: 12px;
+    z-index: 5;
+  }
+  .table-scroll.is-loading .loading-overlay { display: flex; }
+
+  .spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid #eef2f5;
+    border-top-color: #3498db;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ===== Кнопка удаления в строке ===== */
+  td.col-act { text-align: center; padding: 0 6px; }
+
+  .btn-delete {
+    width: 30px;
+    height: 30px;
+    border: 1px solid transparent;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: #e74c3c;
+    transition: background 0.15s, border-color 0.15s, transform 0.05s;
+    vertical-align: middle;
+  }
+  .btn-delete:hover { background: #fdecea; border-color: #e74c3c; }
+  .btn-delete:active { transform: scale(0.92); }
+  .btn-delete:disabled { opacity: 0.4; cursor: wait; }
+
+  /* ===== Нижняя часть ===== */
+  .bottom-part {
+    border-top: 3px solid #eef2f5;
+    padding: 16px 20px 24px;
+    background: #fafcfd;
+  }
+
+  .toolbar { display: flex; gap: 10px; margin-bottom: 18px; }
+
+  .toolbar button {
+    padding: 9px 18px;
+    font-size: 14px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.15s, transform 0.05s;
+  }
+  .toolbar button:active { transform: scale(0.97); }
+
+  .btn-edit { background: #f1c40f; color: #4a3b00; }
+  .btn-edit:hover { background: #e0b400; }
+
+  .btn-save { background: #27ae60; color: #fff; }
+  .btn-save:hover { background: #219150; }
+
+  .btn-add { background: #3498db; color: #fff; }
+  .btn-add:hover { background: #2980b9; }
+
+  .toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== Информация о выбранной строке ===== */
+  .details {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 10px 16px;
+    align-items: center;
+    max-width: 640px;
+  }
+
+  .details label { font-size: 14px; color: #55606b; font-weight: 500; }
+
+  .details input {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid #d8e0e6;
+    border-radius: 6px;
+    background: #fff;
+    color: #2c3e50;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .details input[readonly] { background: #f4f6f8; color: #7a8691; }
+  .details input:not([readonly]):focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52,152,219,0.15);
+  }
+
+  /* ===== Поле пароля + кнопки ===== */
+  .password-wrap { display: flex; gap: 6px; align-items: center; }
+  .password-wrap input { flex: 1; min-width: 0; }
+
+  .password-field { letter-spacing: 2px; font-family: monospace; }
+
+  .icon-btn {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    border: 1px solid #d8e0e6;
+    background: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s, transform 0.05s;
+    padding: 0;
+  }
+  .icon-btn:hover { background: #eef6fc; border-color: #3498db; }
+  .icon-btn:active { transform: scale(0.94); }
+  .icon-btn.copied { background: #d5f5e3; border-color: #27ae60; }
+
+  .copy-hint {
+    position: fixed;
+    padding: 6px 12px;
+    background: #27ae60;
+    color: #fff;
+    font-size: 13px;
+    border-radius: 6px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 999;
+    white-space: nowrap;
+  }
+  .copy-hint.show { opacity: 1; }
+
+  /* ===== Всплывающее сообщение об ошибке ===== */
+  .toast {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #e74c3c;
+    color: #fff;
+    font-size: 14px;
+    padding: 12px 22px;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(231,76,60,0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 1100;
+    max-width: 90vw;
+    text-align: center;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .toast.success {
+    background: #27ae60;
+    box-shadow: 0 8px 24px rgba(39,174,96,0.35);
+  }
+
+  /* ===== Модальное окно master key ===== */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 30, 40, 0.75);
+    backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .modal-overlay.visible { opacity: 1; }
+  .modal-overlay.hidden  { display: none; }
+
+  .modal {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    width: 100%;
+    max-width: 420px;
+    padding: 28px 28px 22px;
+    transform: translateY(-10px);
+    transition: transform 0.2s;
+  }
+  .modal-overlay.visible .modal { transform: translateY(0); }
+
+  .modal h2 { margin: 0 0 6px; font-size: 18px; font-weight: 600; color: #2c3e50; }
+  .modal p.hint { margin: 0 0 18px; font-size: 13px; color: #7a8691; }
+
+  .modal input[type="password"] {
+    width: 100%;
+    padding: 11px 14px;
+    font-size: 15px;
+    font-family: monospace;
+    letter-spacing: 2px;
+    border: 1px solid #d8e0e6;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .modal input[type="password"]:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52,152,219,0.18);
+  }
+
+  .modal-error {
+    color: #e74c3c;
+    font-size: 13px;
+    min-height: 18px;
+    margin-top: 10px;
+    visibility: hidden;
+  }
+  .modal-error.show { visibility: visible; }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .modal-actions button {
+    padding: 9px 20px;
+    font-size: 14px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.15s, transform 0.05s;
+  }
+  .modal-actions button:active { transform: scale(0.97); }
+
+  .modal-actions .btn-ok { background: #27ae60; color: #fff; }
+  .modal-actions .btn-ok:hover { background: #219150; }
+  .modal-actions .btn-ok:disabled { opacity: 0.6; cursor: wait; }
+
+  .modal-actions .btn-cancel { background: #eef2f5; color: #55606b; }
+  .modal-actions .btn-cancel:hover { background: #dde5eb; }
+
+  /* ===== Строка поиска ===== */
+.search-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.search-bar input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 14px;
+  font-size: 14px;
+  border: 1px solid #d8e0e6;
+  border-radius: 6px;
+  background: #fff;
+  color: #2c3e50;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.search-bar input:focus {
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52,152,219,0.15);
+}
+.search-bar .icon-btn {
+  width: 38px;
+  height: 38px;
+  font-size: 14px;
+  color: #7a8691;
+}
+.search-bar .icon-btn:hover {
+  color: #e74c3c;
+  border-color: #e74c3c;
+  background: #fdecea;
+}
+
+/* Сообщение "ничего не найдено" */
+.empty-state .icon { font-size: 32px; opacity: 0.6; }
+</style>
+</head>
+<body>
+
+<!-- ===== МОДАЛЬНОЕ ОКНО MASTER KEY ===== -->
+<div class="modal-overlay hidden" id="masterKeyOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mkTitle">
+    <h2 id="mkTitle">🔒 Введите мастер-ключ</h2>
+    <p class="hint">Для доступа к хранилищу паролей требуется мастер-ключ.</p>
+
+    <input type="password" id="masterKeyInput" placeholder="master_key" autocomplete="off">
+
+    <div class="modal-error" id="masterKeyError">Ключ не верен</div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" id="btnMkCancel">Отмена</button>
+      <button type="button" class="btn-ok"     id="btnMkOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <h1>🔐 Хранилище паролей</h1>
+
+  <!-- ВЕРХНЯЯ ЧАСТЬ -->
+  <div class="top-part">
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Поиск по программе/сайту или описанию…" autocomplete="off">
+      <button type="button" class="icon-btn" id="btnClearSearch" title="Очистить">✕</button>
+    </div>
+
+    <div class="table-scroll is-empty" id="tableScroll">
+
+      <div class="empty-state" id="emptyState">
+        <div class="icon">🗄</div>
+        <div>Нет сохранённых записей</div>
+      </div>
+
+      <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div>Загрузка записей…</div>
+      </div>
+
+      <table id="passwordsTable">
+        <thead>
+          <tr>
+            <th class="col-site">Программа/сайт</th>
+            <th class="col-login">Логин</th>
+            <th class="col-desc">Описание</th>
+            <th class="col-act" title="Удалить">🗑</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+    </div>
+  </div>
+
+  <!-- НИЖНЯЯ ЧАСТЬ -->
+  <div class="bottom-part">
+    <div class="toolbar">
+      <button class="btn-edit" id="btnEdit">Исправить</button>
+      <button class="btn-save" id="btnSave" disabled>Сохранить</button>
+      <button class="btn-add"  id="btnAdd">Добавить</button>
+    </div>
+
+    <div class="details">
+      <label for="fSite">Программа/сайт</label>
+      <input type="text" id="fSite" readonly>
+
+      <label for="fLogin">Логин</label>
+      <input type="text" id="fLogin" readonly>
+
+      <label for="fDesc">Описание</label>
+      <input type="text" id="fDesc" readonly>
+
+      <label for="fPass">Пароль</label>
+      <div class="password-wrap">
+        <input type="password" id="fPass" class="password-field" readonly>
+        <button type="button" class="icon-btn" id="btnTogglePass" title="Показать пароль">👁</button>
+        <button type="button" class="icon-btn" id="btnCopyPass"   title="Скопировать пароль">📋</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="copy-hint" id="copyHint">Скопировано ✓</div>
+<div class="toast" id="errorToast"></div>
+
+<script>
+  /* ============================================================
+     ЗАГЛУШКИ window.* (в реальном приложении — из backend)
+     ============================================================ */
+  if (typeof window.check_master_key !== 'function') {
+    window.check_master_key = async function (master_key) {
+      await new Promise(r => setTimeout(r, 300));
+      return master_key === '12345' ? 'ok' : 'fail';
+    };
+  }
+
+  if (typeof window.get_items !== 'function') {
+    window.get_items = async function () {
+      await new Promise(r => setTimeout(r, 500));
+      return JSON.stringify([
+        {"id":"4adadf1c-ba14-460f-ab60-e26100fdefdd","program":"Google","desc":"Опис","login":"User","password":"123"},
+        {"id":"7bc2e4a1-1111-2222-3333-444455556666","program":"GitHub","desc":"Репозитории","login":"dev_user","password":"gh_pass_2024"},
+        {"id":"9de3f5b2-aaaa-bbbb-cccc-ddddeeeeffff","program":"Telegram","desc":"Мессенджер","login":"+79001234567","password":"t3l3gram!"}
+      ]);
+    };
+  }
+
+  if (typeof window.delete_item !== 'function') {
+    window.delete_item = async function (id) {
+      await new Promise(r => setTimeout(r, 250));
+      return id === '999' ? 'error' : 'ok';
+    };
+  }
+
+  // Имитация серверного хранилища для add/update (чтобы демо работало)
+  if (typeof window.__fakeStore === 'undefined') window.__fakeStore = [];
+
+  if (typeof window.add_item !== 'function') {
+    window.add_item = async function (item) {
+      await new Promise(r => setTimeout(r, 350));
+      if (Math.random() < 0.05) return 'fail';   // 5% имитации сбоя
+      const obj = JSON.parse(item);
+      obj.id = crypto.randomUUID();
+      window.__fakeStore.push(obj);
+      return JSON.stringify(obj);
+    };
+  }
+
+  if (typeof window.update_item !== 'function') {
+    window.update_item = async function (item) {
+      await new Promise(r => setTimeout(r, 350));
+      if (Math.random() < 0.05) return 'fail';
+      const obj = JSON.parse(item);
+      // обновляем в фейковом хранилище
+      const idx = window.__fakeStore.findIndex(x => x.id === obj.id);
+      if (idx >= 0) window.__fakeStore[idx] = obj;
+      return JSON.stringify(obj);
+    };
+  }
+
+  /* ============================================================
+     ЭЛЕМЕНТЫ
+     ============================================================ */
+  const tableScroll = document.getElementById('tableScroll');
+  const table       = document.getElementById('passwordsTable');
+  const tbody       = table.querySelector('tbody');
+
+  const fSite  = document.getElementById('fSite');
+  const fLogin = document.getElementById('fLogin');
+  const fDesc  = document.getElementById('fDesc');
+  const fPass  = document.getElementById('fPass');
+
+  const btnEdit       = document.getElementById('btnEdit');
+  const btnSave       = document.getElementById('btnSave');
+  const btnAdd        = document.getElementById('btnAdd');
+  const btnTogglePass = document.getElementById('btnTogglePass');
+  const btnCopyPass   = document.getElementById('btnCopyPass');
+  const copyHint      = document.getElementById('copyHint');
+  const errorToast    = document.getElementById('errorToast');
+  
+  const searchInput    = document.getElementById('searchInput');
+  const btnClearSearch = document.getElementById('btnClearSearch');
+ 
+  let selectedRow = null;
+  let allItems = [];        // все загруженные записи
+  let searchQuery = '';     // текущий поисковый запрос (в нижнем регистре)
+  let editMode = false;
+  // 'edit' | 'create' | null
+  let editAction = null;
+
+  /* ============================================================
+     ВСПОМОГАТЕЛЬНЫЕ
+     ============================================================ */
+  let toastTimer = null;
+  function showToast(message, type = 'error') {
+    errorToast.textContent = message;
+    errorToast.classList.toggle('success', type === 'success');
+    errorToast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => errorToast.classList.remove('show'), 3000);
+  }
+  const showError   = m => showToast(m, 'error');
+  const showSuccess = m => showToast(m, 'success');
+
+  function showEmptyState() { tableScroll.classList.add('is-empty'); }
+  function showTable()      { tableScroll.classList.remove('is-empty'); }
+  function setLoading(on)   { tableScroll.classList.toggle('is-loading', !!on); }
+
+  function clearFields() {
+    fSite.value = '';
+    fLogin.value = '';
+    fDesc.value = '';
+    fPass.value = '';
+    hidePassword();
+  }
+
+  function setReadonly(on) {
+    [fSite, fLogin, fDesc, fPass].forEach(f =>
+      on ? f.setAttribute('readonly', true) : f.removeAttribute('readonly')
+    );
+  }
+
+  /* ============================================================
+     МОДАЛЬНОЕ ОКНО MASTER KEY
+     ============================================================ */
+  const mkOverlay   = document.getElementById('masterKeyOverlay');
+  const mkInput     = document.getElementById('masterKeyInput');
+  const mkError     = document.getElementById('masterKeyError');
+  const btnMkOk     = document.getElementById('btnMkOk');
+  const btnMkCancel = document.getElementById('btnMkCancel');
+
+  async function checkMasterKey(master_key) {
+    const result = await window.check_master_key(master_key);
+    if (result === 'ok') {
+      closeMasterKeyDialog();
+      await loadItems();
+    } else {
+      mkError.classList.add('show');
+      mkInput.select();
+    }
+  }
+
+  function openMasterKeyDialog() {
+    mkOverlay.classList.remove('hidden');
+    requestAnimationFrame(() => mkOverlay.classList.add('visible'));
+    mkInput.value = '';
+    mkError.classList.remove('show');
+    setTimeout(() => mkInput.focus(), 100);
+  }
+
+  function closeMasterKeyDialog() {
+    mkOverlay.classList.remove('visible');
+    setTimeout(() => mkOverlay.classList.add('hidden'), 200);
+  }
+
+  btnMkOk.addEventListener('click', async () => {
+    const key = mkInput.value;
+    if (!key) { mkError.classList.add('show'); mkInput.focus(); return; }
+    mkError.classList.remove('show');
+    btnMkOk.disabled = true;
+    btnMkOk.textContent = '...';
+    try { await checkMasterKey(key); }
+    finally { btnMkOk.disabled = false; btnMkOk.textContent = 'OK'; }
+  });
+
+  btnMkCancel.addEventListener('click', () => {
+    mkError.classList.add('show');
+    mkError.textContent = 'Введите ключ или закройте приложение';
+  });
+
+  mkInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); btnMkOk.click(); }
+  });
+  mkInput.addEventListener('input', () => mkError.classList.remove('show'));
+
+  document.addEventListener('DOMContentLoaded', () => openMasterKeyDialog());
+
+  /* ============================================================
+     ЗАГРУЗКА ЗАПИСЕЙ
+     ============================================================ */
+  async function loadItems() {
+    setLoading(true);
+    let raw;
+    try {
+      raw = await window.get_items();
+    } catch (err) {
+      setLoading(false);
+      tbody.innerHTML = '';
+      showEmptyState();
+      showError('Ошибка загрузки: ' + err.message);
+      return;
+    }
+
+    let items;
+    try {
+      items = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch (err) {
+      setLoading(false);
+      tbody.innerHTML = '';
+      showEmptyState();
+      showError('Не удалось разобрать ответ сервера');
+      return;
+    }
+
+    allItems = Array.isArray(items) ? items.slice() : [];
+    setLoading(false);
+    renderItems();
+  }
+
+/* ============================================================
+   ОТРИСОВКА С УЧЁТОМ ПОИСКА
+   ============================================================ */
+function renderItems() {
+  const q = searchQuery.trim().toLowerCase();
+
+  const visible = !q
+    ? allItems
+    : allItems.filter(item => {
+        const program = (item.program ?? '').toLowerCase();
+        const desc    = (item.desc    ?? '').toLowerCase();
+        return program.includes(q) || desc.includes(q);
+      });
+
+  // Запоминаем id выбранной строки, чтобы восстановить выбор после перерисовки
+  const prevSelectedId = selectedRow ? selectedRow.dataset.id : null;
+
+  tbody.innerHTML = '';
+  selectedRow = null;
+
+  if (visible.length === 0) {
+    // Если есть записи, но ничего не найдено — показываем особое сообщение
+    if (allItems.length > 0) {
+      showEmptyState();
+      setEmptyMessage('🔍', 'Ничего не найдено');
+    } else {
+      showEmptyState();
+      setEmptyMessage('🗄', 'Нет сохранённых записей');
+    }
+    return;
+  }
+
+  visible.forEach(item => tbody.appendChild(createRow(item)));
+  showTable();
+  setEmptyMessage('🗄', 'Нет сохранённых записей'); // вернуть дефолт
+
+  // Восстанавливаем выбор, если запись всё ещё видна
+  if (prevSelectedId) {
+    const row = tbody.querySelector(`tr[data-id="${CSS.escape(String(prevSelectedId))}"]`);
+    if (row) {
+      selectedRow = row;
+      row.classList.add('selected');
+      fillFields(row);
+    } else {
+      clearFields();
+      hidePassword();
+    }
+  }
+}
+
+/* Меняет текст пустого состояния */
+function setEmptyMessage(icon, text) {
+  const empty = document.getElementById('emptyState');
+  if (!empty) return;
+  const iconEl = empty.querySelector('.icon');
+  const textEl = empty.querySelector('div:not(.icon)');
+  if (iconEl) iconEl.textContent = icon;
+  if (textEl) textEl.textContent = text;
+}
+
+  /* ============================================================
+     СОЗДАНИЕ СТРОКИ
+     ============================================================ */
+  function createRow(item) {
+    const tr = document.createElement('tr');
+    tr.dataset.id       = item.id       ?? '';
+    tr.dataset.site     = item.program  ?? '';
+    tr.dataset.login    = item.login    ?? '';
+    tr.dataset.desc     = item.desc     ?? '';
+    tr.dataset.pass     = item.password ?? '';
+    // маркер: строка ещё не сохранена на сервере
+    if (item.__unsaved) tr.dataset.unsaved = '1';
+
+    const tdSite  = document.createElement('td');
+    const tdLogin = document.createElement('td');
+    const tdDesc  = document.createElement('td');
+    const tdAct   = document.createElement('td');
+
+    tdSite.textContent  = item.program ?? '';
+    tdLogin.textContent = item.login   ?? '';
+    tdDesc.textContent  = item.desc    ?? '';
+
+    tdAct.className = 'col-act';
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-delete';
+    delBtn.title = 'Удалить';
+    delBtn.textContent = '🗑';
+    tdAct.appendChild(delBtn);
+
+    tr.append(tdSite, tdLogin, tdDesc, tdAct);
+    return tr;
+  }
+
+  /* ============================================================
+     ВЫБОР / ЗАПОЛНЕНИЕ
+     ============================================================ */
+  tableScroll.addEventListener('click', e => {
+    if (tableScroll.classList.contains('is-loading')) return;
+
+    const delBtn = e.target.closest('.btn-delete');
+    if (delBtn) {
+      e.stopPropagation();
+      handleDeleteClick(delBtn);
+      return;
+    }
+    const row = e.target.closest('tr');
+    if (!row || !row.closest('#passwordsTable')) return;
+    selectRow(row);
+  });
+
+  function selectRow(row) {
+    if (editMode) return;
+    if (selectedRow) selectedRow.classList.remove('selected');
+    selectedRow = row;
+    row.classList.add('selected');
+    fillFields(row);
+    hidePassword();
+  }
+
+  function fillFields(row) {
+    fSite.value  = row.dataset.site;
+    fLogin.value = row.dataset.login;
+    fDesc.value  = row.dataset.desc;
+    fPass.value  = row.dataset.pass;
+  }
+
+  /* ============================================================
+     УДАЛЕНИЕ
+     ============================================================ */
+  async function handleDeleteClick(btn) {
+    const row = btn.closest('tr');
+    if (!row) return;
+
+    // если строка ещё не сохранена — просто убираем без запроса
+    if (row.dataset.unsaved === '1' || !row.dataset.id) {
+      if (row === selectedRow) { selectedRow = null; clearFields(); }
+      row.remove();
+      if (tbody.children.length === 0) showEmptyState();
+      return;
+    }
+
+    const id   = row.dataset.id;
+    const name = row.dataset.site || 'запись';
+    if (!confirm(`Удалить «${name}»?`)) return;
+
+    btn.disabled = true;
+    const oldText = btn.textContent;
+    btn.textContent = '…';
+    try { await deleteItem(id); }
+    finally { btn.disabled = false; btn.textContent = oldText; }
+  }
+
+  async function deleteItem(id) {
+    const result = await window.delete_item(id);
+    if (result === 'ok') {
+      // удаляем из модели
+      allItems = allItems.filter(it => String(it.id) !== String(id));
+      const row = tbody.querySelector(`tr[data-id="${CSS.escape(String(id))}"]`);
+      if (row) {
+        if (row === selectedRow) { selectedRow = null; clearFields(); }
+        row.remove();
+      }
+      if (tbody.children.length === 0) showEmptyState();
+    } else {
+      showError('Не удалось удалить запись. Попробуйте ещё раз.');
+    }
+  }
+
+  /* ============================================================
+     ИСПРАВИТЬ / ДОБАВИТЬ
+     ============================================================ */
+  btnEdit.addEventListener('click', () => {
+    if (!selectedRow) { alert('Выберите строку'); return; }
+    if (editMode) return;
+    if (selectedRow.dataset.unsaved === '1') { alert('Сначала сохраните новую запись'); return; }
+
+    editMode = true;
+    editAction = 'edit';
+    setReadonly(false);
+    btnSave.disabled = false;
+    btnEdit.disabled = true;
+    fSite.focus();
+  });
+
+  btnAdd.addEventListener('click', () => {
+    if (editMode) { alert('Сначала завершите текущее редактирование'); return; }
+    // Сбрасываем поиск, чтобы новая строка была видна
+    if (searchQuery) {
+      searchInput.value = '';
+      searchQuery = '';
+    }
+
+    showTable();
+
+    const newRow = createRow({
+      program: 'Новый сайт',
+      login: '',
+      desc: '',
+      password: '',
+      __unsaved: true
+    });
+
+    tbody.appendChild(newRow);
+    selectRow(newRow);
+    newRow.scrollIntoView({ block: 'nearest' });
+
+    // сразу переводим в режим создания
+    editMode = true;
+    editAction = 'create';
+    setReadonly(false);
+    btnSave.disabled = false;
+    btnEdit.disabled = true;
+    fSite.focus();
+  });
+
+  /* ============================================================
+     СОХРАНИТЬ
+     ============================================================ */
+  btnSave.addEventListener('click', async () => {
+    if (!selectedRow || !editMode) return;
+
+    // валидация
+    if (!fSite.value.trim()) {
+      showError('Укажите программу/сайт');
+      fSite.focus();
+      return;
+    }
+
+    const isCreate = editAction === 'create' || selectedRow.dataset.unsaved === '1';
+
+    // Собираем item — для update добавляем id
+    const itemObj = {
+      program:  fSite.value,
+      desc:     fDesc.value,
+      login:    fLogin.value,
+      password: fPass.value
+    };
+    if (!isCreate) {
+      itemObj.id = selectedRow.dataset.id;
+    }
+
+    // Порядок ключей как в задании: для update — id первым
+    const itemJson = isCreate
+      ? JSON.stringify(itemObj)
+      : JSON.stringify({
+          id:       itemObj.id,
+          program:  itemObj.program,
+          desc:     itemObj.desc,
+          login:    itemObj.login,
+          password: itemObj.password
+        });
+
+    // блокируем кнопки на время запроса
+    btnSave.disabled = true;
+    const oldSaveText = btnSave.textContent;
+    btnSave.textContent = '…';
+
+    let result;
+    try {
+      result = isCreate
+        ? await window.add_item(itemJson)
+        : await window.update_item(itemJson);
+    } catch (err) {
+      result = 'fail';
+    } finally {
+      btnSave.textContent = oldSaveText;
+      btnSave.disabled = false;
+    }
+
+    // Обработка ответа
+    if (result === 'fail' || !result) {
+      showError(isCreate
+        ? 'Не удалось добавить запись. Попробуйте ещё раз.'
+        : 'Не удалось сохранить изменения. Попробуйте ещё раз.');
+      return;
+    }
+
+    // Парсим ответ сервера
+    let saved;
+    try {
+      saved = typeof result === 'string' ? JSON.parse(result) : result;
+    } catch (err) {
+      showError('Сервер вернул некорректный ответ');
+      return;
+    }
+
+    // Обновляем модель
+    if (isCreate) {
+      allItems.push(saved);
+    } else {
+      const idx = allItems.findIndex(it => String(it.id) === String(saved.id));
+      if (idx >= 0) allItems[idx] = saved;
+    }
+
+    // Обновляем data-атрибуты и текст ячеек строки
+    selectedRow.dataset.id       = saved.id       ?? selectedRow.dataset.id;
+    selectedRow.dataset.site     = saved.program  ?? fSite.value;
+    selectedRow.dataset.login    = saved.login    ?? fLogin.value;
+    selectedRow.dataset.desc     = saved.desc     ?? fDesc.value;
+    selectedRow.dataset.pass     = saved.password ?? fPass.value;
+    delete selectedRow.dataset.unsaved;
+
+    const cells = selectedRow.children;
+    cells[0].textContent = selectedRow.dataset.site;
+    cells[1].textContent = selectedRow.dataset.login;
+    cells[2].textContent = selectedRow.dataset.desc;
+
+    // Выходим из режима редактирования
+    editMode = false;
+    editAction = null;
+    setReadonly(true);
+    btnSave.disabled = true;
+    btnEdit.disabled = false;
+    hidePassword();
+
+    showSuccess(isCreate ? 'Запись добавлена' : 'Изменения сохранены');
+  });
+
+  /* ============================================================
+     ПОКАЗАТЬ / СКРЫТЬ ПАРОЛЬ + КОПИРОВАНИЕ
+     ============================================================ */
+  btnTogglePass.addEventListener('click', () => {
+    if (!fPass.value) return;
+    if (fPass.type === 'password') {
+      fPass.type = 'text';
+      btnTogglePass.textContent = '🙈';
+      btnTogglePass.title = 'Скрыть пароль';
+    } else {
+      hidePassword();
+    }
+  });
+
+  function hidePassword() {
+    fPass.type = 'password';
+    btnTogglePass.textContent = '👁';
+    btnTogglePass.title = 'Показать пароль';
+  }
+
+  btnCopyPass.addEventListener('click', async () => {
+    const value = fPass.value;
+    if (!value) return;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const tmp = document.createElement('textarea');
+        tmp.value = value;
+        tmp.style.position = 'fixed';
+        tmp.style.opacity = '0';
+        document.body.appendChild(tmp);
+        tmp.select();
+        document.execCommand('copy');
+        document.body.removeChild(tmp);
+      }
+      showCopyFeedback();
+    } catch (err) {
+      alert('Не удалось скопировать: ' + err.message);
+    }
+  });
+
+  function showCopyFeedback() {
+    btnCopyPass.classList.add('copied');
+    btnCopyPass.textContent = '✓';
+    setTimeout(() => {
+      btnCopyPass.classList.remove('copied');
+      btnCopyPass.textContent = '📋';
+    }, 1200);
+
+    const rect = btnCopyPass.getBoundingClientRect();
+    copyHint.style.left = (rect.left - 60) + 'px';
+    copyHint.style.top  = (rect.top - 34) + 'px';
+    copyHint.classList.add('show');
+    setTimeout(() => copyHint.classList.remove('show'), 1200);
+  }
+
+  /* ============================================================
+   ПОИСК
+   ============================================================ */
+let searchDebounce = null;
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => {
+    searchQuery = searchInput.value;
+    // Если идёт редактирование — не сбрасываем его, просто перерисовываем список
+    renderItems();
+  }, 150);
+});
+
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    searchInput.value = '';
+    searchQuery = '';
+    renderItems();
+  }
+});
+
+btnClearSearch.addEventListener('click', () => {
+  searchInput.value = '';
+  searchQuery = '';
+  renderItems();
+  searchInput.focus();
+});
+</script>
+
+</body>
+</html>
